@@ -10,54 +10,58 @@
 #include <sstream>
 #include "Snap.h"
 
-class CreateData
-{
-    protected:
-        TVec<TVec<TPair<TFlt,TFlt> > > signal_values;
-        TVec<TStr> signal_names;
-        TVec<TInt> signal_idx;
-        int signal_count;
-        struct heapData
-        {
-            int signal_index;
-            int signal_position;
-        };
+typedef TVec<TPair<TFlt,TFlt> > TSensorData;
 
-    public:
-        void Save(TSOut &Sout) {signal_names.Save(Sout);signal_idx.Save(Sout);signal_values.Save(Sout);}
-        void Load(TSIn &Sin) {signal_names.Load(Sin);signal_idx.Load(Sin);signal_values.Load(Sin);}
-        void TSVtoBin(const char *inp, const char *outp) {
-            const TStr InFNm = inp;
-            const TStr OutFNm = outp;
-            TSsParser Ss(InFNm);
-            TFOut FOut(OutFNm);
-            int counter = 0;
-            while (Ss.Next()) {
-                if(strcmp(Ss[0],"bool") != 0 && strcmp(Ss[0],"float") != 0) {
-                    continue;
-                }
-                signal_names.Add(TStr(Ss[0]));
-                signal_idx.Add(TInt(atoi(Ss[1])));
-                TVec<TPair<TFlt,TFlt> > data;
-                for(int i = 2 ; i < Ss.Len(); ++i) {
-                    char *token = strtok(Ss[i],",");
-                    double timestamp = atof(token);
-                    token = strtok(NULL,",");
-                    double value = 0;
-                    if(strcmp(Ss[0],"float") == 0) {
-                        value = atof(token);
-                    } else {
-                        if (token[0] == 't') {
-                            value = 1;
-                        }
-                    }
-                    data.Add(TPair<TFlt,TFlt>(TFlt(timestamp),TFlt(value)));
-                }
-                signal_values.Add(data);
-            }
-            Save(FOut);
-        }
-        void parseData(std::string);
-        Eigen::MatrixXd fillData(long long,int,int);
+/// Virtual class encapsulating TSV conversion to sparse SNAP format
+class SparseTimeBase {
+protected:
+    /// id_str: [sensor1 data, sensor2 data, ...]
+    THash<TStr, TVec<TSensorData> > IdSignalValues;
+    // number of sensors
+    TInt SensorCount;
+    struct heapData
+    {
+        int signal_index;
+        int signal_position;
+    };
+    /* Read in the timestamp from the row and remove it. Place
+     * the timestamp in epoch form into result */
+    std::string(*ConvertTS)(std::string row, long long &);
+
+protected:
+    /// Default implementation for ConvertTS.
+    /// The timestamp looks like Year-Day-Month Hour:Minute:Second
+    std::string defaultConvertTS(std::string row, long long &result);
+    // interpret the value as a bool or float
+    TFlt readValue(std::string val);
+    // return vector of strings split by ,
+    std::vector<std::string> readCSVLine(std::string line);
+
+public:
+    SparseTimeSensorBase(int n_sensors) : SensorCount(n_sensors), ConvertTS(defaultConvertTS) {}
+    /// can pass in a method to convert the timestamp to long long
+    SparseTimeSensorBase(int n_sensors, int(*ConvertTSfn)(std::string row, long long &)) : SensorCount(n_sensors), ConvertTS(ConvertTSfn) {}
+
+    virtual void parseData(std::string filename, bool hasHeader) = 0;
+    /// Save SNAP format
+    void Save(TSOut &Sout) {
+        IdSignalValues.Save(Sout);
+        SensorCount.Save(Sout);
+    }
+    /// Load from SNAP binary
+    void Load(TSIn &Sin) {
+        IdSignalValues.Load(Sout);
+        SensorCount.Load(Sout);
+    }
+    Eigen::MatrixXd fillData(long long,int,int);
 };
+
+/// Read TSV in Row Form: Each file is named with id_str
+/// Each row of file contains timestamp, sensor values
+class SparseTimeRowForm : SparseTimeBase {
+public:
+    void parseData(std::string filename, bool hasHeader)
+
+};
+
 #endif

@@ -1,44 +1,36 @@
 #include "create_data.hpp"
 #include <algorithm>
 
-void CreateData::parseData(std::string filename) {
-    std::ifstream infile(filename);
-    std::string line;
-    signal_count = 0;
-    while(std::getline(infile,line)){
-        signal_count++;
-        std::stringstream ss(line);
-        TVec<TPair<TFlt,TFlt> > data;
-        std::string point;
-        int counter = 0;
-        int dtype = 0;
-        while(std::getline(ss,point,'\t')){
-            if(counter == 0) {
-                if(point.compare("bool") != 0 && point.compare("float") != 0){ // currently handling only bools and floats
-                    break;
-                }
-                dtype = point.compare("bool") == 0 ? 0 : 1;
-            } else if (counter > 1) {
-                std::size_t loc = point.find(",");
-                if (loc != std::string::npos){
-                    long long int timestamp = stoll(point.substr(0,loc));
-                    std::string str_value = point.substr(loc+1);
-                    double value;
-                    if(dtype == 0){
-                        value = str_value.compare("f") == 0 ? 0 : 1;
-                    } else {
-                        value = stod(str_value);
-                    }
-                    data.Add(TPair<TFlt,TFlt>(TFlt(timestamp),TFlt(value)));
-                }
-            }
-            counter++;
-        }
-        signal_values.Add(data);
-    }
+/// SparseTimeBase
+
+std::string SparseTimeBase::defaultConvertTS(
+    std::string row, long long &result) {
+
+    std::stringstream ss(row);
+    std::tm t = {};
+    ss >> std::get_time(&t, "%Y-%b-%d %H:%M:%S");
+    result = mktime(&t);
+    std::string rest;
+    std::getline(ss, rest);
+    return rest;
 }
 
-Eigen::MatrixXd CreateData::fillData(long long initialTimestamp, int duration, int granularity) {
+std::vector<std::string> SparseTimeBase::readCSVLine(std::string line, char delim=',') {
+    // escape \, fields separated by ",", fields can be quoted with "
+    boost::escaped_list_separator<char> sep( '\\', delim, '"' ) ;
+    boost::tokenizer< boost::escaped_list_separator<char> > tokenizer( line, sep );
+    return std::vector<std::string>( tokenizer.begin(), tokenizer.end() ) ;
+}
+
+
+TFlt SparseTimeBase::readValue(std::string val) {
+    if (val.compare("f") == 0) return TFlt(0);
+    if (val.compare("t") == 0) return TFlt(1);
+    double val = stod(str_value);
+    return TFlt(val);
+}
+
+Eigen::MatrixXd SparseTimeBase::fillData(long long initialTimestamp, int duration, int granularity) {
     int size = static_cast<int>(duration/granularity);
     Eigen::MatrixXd filledData(size,signal_count);
     std::vector<struct heapData> h_data;
@@ -74,5 +66,36 @@ Eigen::MatrixXd CreateData::fillData(long long initialTimestamp, int duration, i
     }
     return filledData;
 }
+
+///SparseTimeRowForm
+
+void SparseTimeRowForm::parseData(std::string filename, bool isHeader) {
+    std::ifstream inFile(filename);
+    AssertR(inFile.is_open(), "could not open file " + filename);
+    IdSignalValues.AddKey(id_string);
+    TVec<TSensorData> signal_values(SensorCount);
+    std::string line;
+    while (std::getline(infile, line)) {
+        if (isHeader) {
+            isHeader = false;
+            continue;
+        }
+        long long ts;
+        // fastforward line to remove timestamp
+        std::string ff_line = ConvertTs(line, ts);
+        std::vector<std::string> row = readCSVLine(ff_line);
+        AssertR(row.size() == SensorCount);
+        for (int i = 0; i < row.size(); i++) {
+            if (row[i] != "") {
+                TFlt val = readValue(row[i]);
+                // add the timestamp, val pair to the right sensor
+                signal_values[i].Add(TPair<TFlt, TFlt>(timestamp, val));
+            }
+        }
+    }
+    // add under the id string for this file
+    IdSignalValues.AddDat(id_string, signal_values);
+}
+
 
 
