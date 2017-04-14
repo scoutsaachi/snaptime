@@ -31,16 +31,16 @@ protected:
 protected:
     /// Default implementation for ConvertTS.
     /// The timestamp looks like Year-Day-Month Hour:Minute:Second
-    std::string defaultConvertTS(std::string row, long long &result);
+    static std::string defaultConvertTS(std::string row, long long &result);
     // interpret the value as a bool or float
     TFlt readValue(std::string val);
     // return vector of strings split by ,
     std::vector<std::string> readCSVLine(std::string line);
 
 public:
-    SparseTimeSensorBase(int n_sensors) : SensorCount(n_sensors), ConvertTS(defaultConvertTS) {}
+    SparseTimeBase(int n_sensors) : SensorCount(n_sensors) {ConvertTS = defaultConvertTS;}
     /// can pass in a method to convert the timestamp to long long
-    SparseTimeSensorBase(int n_sensors, int(*ConvertTSfn)(std::string row, long long &)) : SensorCount(n_sensors), ConvertTS(ConvertTSfn) {}
+    SparseTimeBase(int n_sensors, std::string(*ConvertTSfn)(std::string row, long long &)) : SensorCount(n_sensors) {ConvertTS = ConvertTSfn;}
 
     virtual void parseData(std::string filename, bool hasHeader) = 0;
     /// Save SNAP format
@@ -50,8 +50,8 @@ public:
     }
     /// Load from SNAP binary
     void Load(TSIn &Sin) {
-        IdSignalValues.Load(Sout);
-        SensorCount.Load(Sout);
+        IdSignalValues.Load(Sin);
+        SensorCount.Load(Sin);
     }
     Eigen::MatrixXd fillData(long long,int,int);
 };
@@ -60,8 +60,7 @@ public:
 /// Each row of file contains timestamp, sensor values
 class SparseTimeRowForm : SparseTimeBase {
 public:
-    void parseData(std::string filename, bool hasHeader)
-
+    void parseData(std::string filename, bool hasHeader);
 };
 
 #endif

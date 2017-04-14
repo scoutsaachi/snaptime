@@ -30,9 +30,10 @@ TFlt SparseTimeBase::readValue(std::string val) {
     return TFlt(val);
 }
 
-Eigen::MatrixXd SparseTimeBase::fillData(long long initialTimestamp, int duration, int granularity) {
+Eigen::MatrixXd SparseTimeBase::fillData(std::string id_str, long long initialTimestamp, int duration, int granularity) {
     int size = static_cast<int>(duration/granularity);
     Eigen::MatrixXd filledData(size,signal_count);
+    TVec<TSensorData> signa_values = IdSignalValues[id_str];
     std::vector<struct heapData> h_data;
     for(int i = 0 ; i < signal_values.Len(); ++i){
         signal_count++;
