@@ -15,10 +15,8 @@ typedef TVec<TPair<TFlt,TFlt> > TSensorData;
 /// Virtual class encapsulating TSV conversion to sparse SNAP format
 class SparseTimeBase {
 protected:
-    /// id_str: [sensor1 data, sensor2 data, ...]
-    THash<TStr, TVec<TSensorData> > IdSignalValues;
-    // number of sensors
-    TInt SensorCount;
+    /// id_str: {id_sensor: sensor data} ...]
+    THash<TStr, THash<TInt, TSensorData> > IdSignalValues;
     struct heapData
     {
         int signal_index;
@@ -38,20 +36,18 @@ protected:
     std::vector<std::string> readCSVLine(std::string line);
 
 public:
-    SparseTimeBase(int n_sensors) : SensorCount(n_sensors) {ConvertTS = defaultConvertTS;}
+    SparseTimeBase() {ConvertTS = defaultConvertTS;}
     /// can pass in a method to convert the timestamp to long long
-    SparseTimeBase(int n_sensors, std::string(*ConvertTSfn)(std::string row, long long &)) : SensorCount(n_sensors) {ConvertTS = ConvertTSfn;}
+    SparseTimeBase(std::string(*ConvertTSfn)(std::string row, long long &)) {ConvertTS = ConvertTSfn;}
 
     virtual void parseData(std::string filename, bool hasHeader) = 0;
     /// Save SNAP format
     void Save(TSOut &Sout) {
         IdSignalValues.Save(Sout);
-        SensorCount.Save(Sout);
     }
     /// Load from SNAP binary
     void Load(TSIn &Sin) {
         IdSignalValues.Load(Sin);
-        SensorCount.Load(Sin);
     }
     Eigen::MatrixXd fillData(long long,int,int);
 };
@@ -60,6 +56,27 @@ public:
 /// Each row of file contains timestamp, sensor values
 class SparseTimeRowForm : SparseTimeBase {
 public:
+    void parseData(std::string filename, bool hasHeader);
+};
+
+/// Read TSV in Col Form: Each file is named with the sensor name
+/// Each row of file contains ID, timestamp, ID, value
+class SparseTimeColForm : SparseTimeBase {
+protected:
+    THash<TStr, TInt> SensorIndex; //sensor string to index in IdSignalValues
+    TInt SensorCount; //next index for sensor
+public:
+    void Save(TSOut &Sout) {
+        SparseTimeBase::Save(Sout);
+        SensorIndex.Save(Sout);
+        SensorCount.Save(Sout);
+    }
+    /// Load from SNAP binary
+    void Load(TSIn &Sin) {
+        SparseTimeBase::Load(Sin);
+        SensorIndex.Load(Sin);
+        SensorCount.Load(Sin);
+    }
     void parseData(std::string filename, bool hasHeader);
 };
 

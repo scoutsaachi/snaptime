@@ -1,5 +1,6 @@
 #include "create_data.hpp"
 #include <algorithm>
+#include <boost/tokenizer.hpp>
 
 /// SparseTimeBase
 
@@ -70,11 +71,11 @@ Eigen::MatrixXd SparseTimeBase::fillData(std::string id_str, long long initialTi
 
 ///SparseTimeRowForm
 
-void SparseTimeRowForm::parseData(std::string filename, bool isHeader) {
+void SparseTimeRowForm::parseData(std::string filename, bool hasHeader) {
     std::ifstream inFile(filename);
     AssertR(inFile.is_open(), "could not open file " + filename);
-    IdSignalValues.AddKey(id_string);
-    TVec<TSensorData> signal_values(SensorCount);
+    IdSignalValues.AddKey(filename);
+    THash<TInt, TSensorData> signal_values;
     std::string line;
     while (std::getline(infile, line)) {
         if (isHeader) {
@@ -84,19 +85,54 @@ void SparseTimeRowForm::parseData(std::string filename, bool isHeader) {
         long long ts;
         // fastforward line to remove timestamp
         std::string ff_line = ConvertTs(line, ts);
+        TFlt timestamp = TFlt(ts);
         std::vector<std::string> row = readCSVLine(ff_line);
-        AssertR(row.size() == SensorCount);
         for (int i = 0; i < row.size(); i++) {
             if (row[i] != "") {
                 TFlt val = readValue(row[i]);
                 // add the timestamp, val pair to the right sensor
-                signal_values[i].Add(TPair<TFlt, TFlt>(timestamp, val));
+                signal_values[i].AddDat(TInt(i), TPair<TFlt, TFlt>(timestamp, val));
             }
         }
     }
     // add under the id string for this file
-    IdSignalValues.AddDat(id_string, signal_values);
+    IdSignalValues.AddDat(filename, signal_values);
 }
 
-
+void SparseTimeColForm::parseData(std::string filename, bool isHeader) {
+    std::ifstream inFile(filename);
+    AssertR(inFile.is_open(), "could not open file " + filename);
+    // get sensor id for this file
+    TInt sensor_id = SensorCount;
+    if (SensorIndex.IsKey(TStr(filename))) {
+        sensor_id = SensorIndex[TStr(filename)];
+    } else {
+        SensorCount++;
+    }
+    std::string line;
+    while (std::getline(infile, line)) {
+        if (isHeader) {
+            isHeader = false;
+            continue;
+        }
+        std::vector<std::string> row = readCSVLine(ff_line);
+        // read ID string
+        TStr id_str = TStr(row[0]);
+        // read timestamp
+        long long ts;
+        ConvertTs(row[1], ts);
+        // read value
+        TFlt val = readValue(row[2]);
+        // add id entry if does not exist
+        if (!IdSignalValues.IsKey(id_str)) {
+            THash<TInt, TSensorData> empty_id_vals;
+            IdSignalValues.AddDat(id_str, empty_id_vals);
+        }
+        if (!IdSignalValues[id_str].IsKey(sensor_id)) {
+            TSensorData empty_sensor_data;
+            IdSignalValues[id_str].AddDat(sensor_id, empty_sensor_data);
+        }
+        IdSignalValues[id_str][sensor_id].Add(TPair<TFlt, TFlt>(TFlt(ts), val));
+    }
+}
 
